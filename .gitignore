@@ -1,0 +1,10 @@
+# configs dos containers
+config/
+jackett-config/
+
+# mídia e downloads
+downloads/
+media/
+
+# ambiente
+.env
