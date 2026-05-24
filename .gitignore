@@ -1,10 +1,15 @@
-# configs dos containers
-config/
+# env real
+.env
+
+# configs
+config-qbittorrent/
+config-prowlarr/
+config-sonarr/
+config-radarr/
+config-lidarr/
+config-jellyfin/
 jackett-config/
 
-# mídia e downloads
+# dados
 downloads/
 media/
-
-# ambiente
-.env
