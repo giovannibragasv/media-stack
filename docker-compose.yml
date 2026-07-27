@@ -1,118 +1,143 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  media-stack — self-hosted media ecosystem
+#
+#  Design principle: every service that moves media shares ONE mount point,
+#  ${DATA_ROOT} -> /data, so Sonarr/Radarr/Lidarr can HARDLINK imports instead
+#  of copying them. Downloads live in /data/downloads; final libraries live in
+#  /data/{movies,tv,music}. Same filesystem = instant, zero-extra-disk imports,
+#  and qBittorrent keeps seeding the original files for the tracker.
+#
+#  Do NOT split this back into separate downloads + media mounts: different
+#  mounts = different filesystems inside the container = hardlinks silently fall
+#  back to copies (your storage doubles and seeding breaks).
+#
+#  Storage location is controlled in ONE place via .env:
+#    CONFIG_ROOT  (default ./config)  -> per-service app state
+#    DATA_ROOT    (default ./data)    -> downloads + media libraries
+#  Moving to a dedicated server / external HDD is then a one-line .env change;
+#  the in-container paths (/config, /data) never move, so hardlinks are safe.
+#
+#  Note: the top-level `version:` key is intentionally omitted — it is obsolete
+#  in Compose v2. `name:` sets the Compose project name (network prefix, etc.)
+#  independently of the folder name.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: media-stack
+
 services:
+  # ── Torrent client (the ONLY one — keeps private-tracker ratio sane) ────────
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
-    container_name: qbittorrent
+    container_name: media-stack-qbittorrent
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
-      - WEBUI_PORT=${QBIT_WEBUI_PORT}
+      # WEBUI_PORT is deliberately NOT set here. The container listens on 8080
+      # internally; we only remap the HOST port below. Setting WEBUI_PORT would
+      # change the *internal* port and break the "${QBIT_WEBUI_PORT}:8080" map.
     volumes:
-      - ./config-qbittorrent:/config
-      - ./downloads:/downloads
+      - ${CONFIG_ROOT:-./config}/qbittorrent:/config
+      - ${DATA_ROOT:-./data}:/data               # save path: /data/downloads
     ports:
-      - "${QBIT_WEBUI_PORT}:8080"
-      - "6881:6881"
-      - "6881:6881/udp"
+      - "${QBIT_WEBUI_PORT:-8080}:8080"          # WebUI
+      - "${QBIT_TORRENT_PORT:-6881}:6881"        # BitTorrent (TCP)
+      - "${QBIT_TORRENT_PORT:-6881}:6881/udp"    # BitTorrent (UDP/DHT)
     restart: unless-stopped
-    networks:
-      - media-net
+    networks: [media-net]
 
+  # ── Indexer manager: one place to configure all trackers ────────────────────
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
-    container_name: prowlarr
+    container_name: media-stack-prowlarr
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ./config-prowlarr:/config
+      - ${CONFIG_ROOT:-./config}/prowlarr:/config
     ports:
-      - "${PROWLARR_PORT}:9696"
+      - "${PROWLARR_PORT:-9696}:9696"
     restart: unless-stopped
-    networks:
-      - media-net
+    networks: [media-net]
 
+  # ── TV automation ───────────────────────────────────────────────────────────
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
-    container_name: sonarr
+    container_name: media-stack-sonarr
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ./config-sonarr:/config
-      - ./media/tv:/tv
-      - ./downloads:/downloads
+      - ${CONFIG_ROOT:-./config}/sonarr:/config
+      - ${DATA_ROOT:-./data}:/data               # root folder: /data/tv
     ports:
-      - "${SONARR_PORT}:8989"
+      - "${SONARR_PORT:-8989}:8989"
     restart: unless-stopped
-    networks:
-      - media-net
+    networks: [media-net]
 
+  # ── Movie automation ────────────────────────────────────────────────────────
   radarr:
     image: lscr.io/linuxserver/radarr:latest
-    container_name: radarr
+    container_name: media-stack-radarr
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ./config-radarr:/config
-      - ./media/movies:/movies
-      - ./downloads:/downloads
+      - ${CONFIG_ROOT:-./config}/radarr:/config
+      - ${DATA_ROOT:-./data}:/data               # root folder: /data/movies
     ports:
-      - "${RADARR_PORT}:7878"
+      - "${RADARR_PORT:-7878}:7878"
     restart: unless-stopped
-    networks:
-      - media-net
+    networks: [media-net]
 
+  # ── Music automation ────────────────────────────────────────────────────────
   lidarr:
     image: lscr.io/linuxserver/lidarr:latest
-    container_name: lidarr
+    container_name: media-stack-lidarr
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ./config-lidarr:/config
-      - ./media/music:/music
-      - ./downloads:/downloads
+      - ${CONFIG_ROOT:-./config}/lidarr:/config
+      - ${DATA_ROOT:-./data}:/data               # root folder: /data/music
     ports:
-      - "${LIDARR_PORT}:8686"
+      - "${LIDARR_PORT:-8686}:8686"
     restart: unless-stopped
-    networks:
-      - media-net
+    networks: [media-net]
 
+  # ── Media server (Netflix-style frontend) ───────────────────────────────────
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
-    container_name: jellyfin
+    container_name: media-stack-jellyfin
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
     volumes:
-      - ./config-jellyfin:/config
-      - ./media/movies:/media/movies
-      - ./media/tv:/media/tv
-      - ./media/music:/media/music
+      - ${CONFIG_ROOT:-./config}/jellyfin:/config
+      - ${DATA_ROOT:-./data}:/data               # libraries: /data/{movies,tv,music}
     ports:
-      - "${JELLYFIN_PORT}:8096"
+      - "${JELLYFIN_PORT:-8096}:8096"
     restart: unless-stopped
-    networks:
-      - media-net
+    networks: [media-net]
 
+  # ── Cloudflare solver for protected public indexers (used by Prowlarr) ───────
+  #  Not an LSIO image, so it takes no PUID/PGID. Prowlarr reaches it in-network
+  #  at http://flaresolverr:8191 (Settings ▸ Indexer Proxies).
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
-    container_name: flaresolverr
+    container_name: media-stack-flaresolverr
     environment:
-      - LOG_LEVEL=info
+      - LOG_LEVEL=${FLARESOLVERR_LOG_LEVEL:-info}
       - TZ=${TZ}
     ports:
-      - "8191:8191"
+      - "${FLARESOLVERR_PORT:-8191}:8191"
     restart: unless-stopped
-    networks:
-      - media-net
+    networks: [media-net]
 
 networks:
   media-net:

@@ -1,15 +1,34 @@
-# env real
+# ── Secrets / local environment ──────────────────────────────────────────────
 .env
+!.env.example
 
-# configs
-config-qbittorrent/
-config-prowlarr/
-config-sonarr/
-config-radarr/
-config-lidarr/
-config-jellyfin/
-jackett-config/
+# ── Python ───────────────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.py[cod]
 
-# dados
+# ── macOS cruft ──────────────────────────────────────────────────────────────
+.DS_Store
+
+# ── Service config / app data (API keys, DBs, credentials) — NEVER publish ────
+config/
+
+# ── Media & downloads (large, personal) ──────────────────────────────────────
+data/
+
+# ── Legacy layout (pre-refactor) — ignore if any of it lingers on disk ────────
 downloads/
 media/
+config-*/
+jackett-config/
+
+# ── Personal data used by scripts (watchlist CSV exports, etc.) ───────────────
+scripts/watchlists/
+*.csv
+
+# ── Internal planning / notes (local working docs, not for GitHub) ────────────
+planning/
+
+# ── Backups created during migrations ────────────────────────────────────────
+*.bak
+*.bak-*
