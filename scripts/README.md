@@ -1,7 +1,19 @@
 # scripts/
 
-Helper scripts for the media stack. Each one is standalone and talks to a
-running service's HTTP API — none of them need to run *inside* a container.
+Helper scripts for the media stack.
+
+## `bootstrap.sh`
+
+First-run setup. Idempotent — run it any time:
+
+```bash
+./scripts/bootstrap.sh
+```
+
+Creates the `config/` + `data/` folder layout the compose file expects, and
+seeds `.env` from `.env.example` if you don't have one yet. It reads
+`CONFIG_ROOT` / `DATA_ROOT` from `.env` when present, so it makes the folders in
+the right place even if you've repointed storage.
 
 ## `import_letterboxd_to_radarr.py`
 

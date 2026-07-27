@@ -123,13 +123,12 @@ mount, the *arrs import by hardlinking instead of copying:
 # 1. Clone
 git clone <your-repo-url> && cd <repo>
 
-# 2. Configure environment
-cp .env.example .env
-#   edit .env — set PUID/PGID (macOS: 501/20, Linux: usually 1000/1000; `id -u`, `id -g`)
-#   and TZ, ports, etc. Optionally repoint CONFIG_ROOT / DATA_ROOT (e.g. to an HDD).
+# 2. Bootstrap — creates the config/ + data/ layout and seeds .env from the example
+./scripts/bootstrap.sh
 
-# 3. Create the storage layout
-mkdir -p config data/{downloads,movies,tv,music}
+# 3. Edit .env — set PUID/PGID (macOS: 501/20, Linux: usually 1000/1000; `id -u`, `id -g`),
+#    TZ, ports, RADARR_API_KEY. Optionally repoint CONFIG_ROOT / DATA_ROOT (e.g. to an HDD).
+$EDITOR .env
 
 # 4. Bring it up
 docker compose up -d
@@ -138,6 +137,9 @@ docker compose up -d
 docker compose ps
 docker compose logs -f qbittorrent
 ```
+
+<sub>Prefer to do it by hand instead of `bootstrap.sh`? `cp .env.example .env` and
+`mkdir -p config data/{downloads,movies,tv,music}` do the same thing.</sub>
 
 > **Moving to a dedicated server / external HDD later?** Set `DATA_ROOT`
 > (and `CONFIG_ROOT`) in `.env` — e.g. `DATA_ROOT=/mnt/media/data` — and nothing
