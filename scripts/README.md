@@ -16,6 +16,12 @@ Seeds `.env` from `.env.example` if you don't have one yet, then creates the
 so it makes the folders exactly where compose will mount them, shell overrides
 included.
 
+## `backup_config.sh`
+
+Timestamped, consistent backup of `config/` while the stack runs. See
+[Backups and restore](../README.md#backups-and-restore) for options, the restore
+steps and the optional launchd schedule.
+
 ## `import_letterboxd_to_radarr.py`
 
 Bulk-import a [Letterboxd](https://letterboxd.com) watchlist into Radarr.
