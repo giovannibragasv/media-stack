@@ -10,10 +10,34 @@ First-run setup. Idempotent — run it any time:
 ./scripts/bootstrap.sh
 ```
 
-Creates the `config/` + `data/` folder layout the compose file expects, and
-seeds `.env` from `.env.example` if you don't have one yet. It reads
-`CONFIG_ROOT` / `DATA_ROOT` from `.env` when present, so it makes the folders in
-the right place even if you've repointed storage.
+Seeds `.env` from `.env.example` if you don't have one yet, then creates the
+`config/` + `data/` folder layout the compose file expects. It resolves
+`CONFIG_ROOT` / `DATA_ROOT` through `docker compose config` (via `lib/env.sh`),
+so it makes the folders exactly where compose will mount them, shell overrides
+included.
+
+## `verify.sh`
+
+Proves the running stack is healthy. Rerun it after any change to the stack:
+
+```bash
+./scripts/verify.sh
+```
+
+It prints one `PASS`/`FAIL` line per check and exits non-zero if any fail:
+
+- every compose service is running and answers HTTP on its published port
+  (2xx, 3xx or 401 counts as up)
+- `/data/downloads` and `/data/movies` are one filesystem inside Radarr: it
+  hardlinks a probe file as the app user, compares inodes, then deletes both
+- no stale qBittorrent `lockfile` while qBittorrent is down (the crash-loop
+  from `planning/architecture.md`)
+
+It finds the stack by the `media-stack` compose project, so it works from any
+checkout. Ports come from `docker compose config`, so shell variables override
+`.env` (or `.env.example` in a checkout without one), e.g.
+`RADARR_PORT=1 ./scripts/verify.sh` shows a `FAIL`. The lockfile check reads
+qBittorrent's live `/config` mount, or the compose config when it has none. It needs `jq`. Nothing is changed apart from the two probe files.
 
 ## `import_letterboxd_to_radarr.py`
 

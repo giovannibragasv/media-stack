@@ -17,6 +17,7 @@ Usage:
 
 See scripts/README.md for details.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -132,8 +133,11 @@ def run(cfg: Config, csv_path: str, unmatched_path: str) -> int:
     try:
         version = radarr.ping()
     except requests.RequestException as e:
-        log.error("Cannot reach Radarr at %s (%s). Is it up? Is RADARR_API_KEY correct?",
-                  cfg.radarr_url, e)
+        log.error(
+            "Cannot reach Radarr at %s (%s). Is it up? Is RADARR_API_KEY correct?",
+            cfg.radarr_url,
+            e,
+        )
         return 2
     log.info("Connected to Radarr %s at %s", version, cfg.radarr_url)
 
@@ -177,8 +181,13 @@ def run(cfg: Config, csv_path: str, unmatched_path: str) -> int:
             continue
 
         if cfg.dry_run:
-            log.info("%s -> WOULD ADD: %s (%s) tmdb=%s",
-                     prefix, movie["title"], movie.get("year"), movie["tmdbId"])
+            log.info(
+                "%s -> WOULD ADD: %s (%s) tmdb=%s",
+                prefix,
+                movie["title"],
+                movie.get("year"),
+                movie["tmdbId"],
+            )
             added += 1
             existing.add(movie["tmdbId"])  # avoid dup-counting within the run
             continue
@@ -198,31 +207,54 @@ def run(cfg: Config, csv_path: str, unmatched_path: str) -> int:
             w = csv.DictWriter(f, fieldnames=fieldnames)
             w.writeheader()
             w.writerows(unmatched_rows)
-        log.info("Wrote %d unmatched rows to %s (review by hand)", len(unmatched_rows), unmatched_path)
+        log.info(
+            "Wrote %d unmatched rows to %s (review by hand)", len(unmatched_rows), unmatched_path
+        )
 
     verb = "would add" if cfg.dry_run else "added"
-    log.info("Done. %s=%d, already_present=%d, skipped=%d, unmatched=%d",
-             verb, added, present, skipped, unmatched)
+    log.info(
+        "Done. %s=%d, already_present=%d, skipped=%d, unmatched=%d",
+        verb,
+        added,
+        present,
+        skipped,
+        unmatched,
+    )
     return 0
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Import a Letterboxd watchlist into Radarr.")
     p.add_argument("--csv", required=True, help="Path to Letterboxd watchlist CSV")
-    p.add_argument("--url", default=os.getenv("RADARR_URL", "http://localhost:7878"),
-                   help="Radarr base URL (default: env RADARR_URL or http://localhost:7878)")
-    p.add_argument("--root-folder", default=os.getenv("RADARR_ROOT_FOLDER", "/data/movies"),
-                   help="Radarr root folder path (default: /data/movies)")
-    p.add_argument("--quality-profile-id", type=int,
-                   default=int(os.getenv("RADARR_QUALITY_PROFILE_ID", "7")),
-                   help="Radarr quality profile id (default: 7 = 'Movies 1080p')")
-    p.add_argument("--search", action="store_true",
-                   help="Tell Radarr to search for each movie right after adding")
+    p.add_argument(
+        "--url",
+        default=os.getenv("RADARR_URL", "http://localhost:7878"),
+        help="Radarr base URL (default: env RADARR_URL or http://localhost:7878)",
+    )
+    p.add_argument(
+        "--root-folder",
+        default=os.getenv("RADARR_ROOT_FOLDER", "/data/movies"),
+        help="Radarr root folder path (default: /data/movies)",
+    )
+    p.add_argument(
+        "--quality-profile-id",
+        type=int,
+        default=int(os.getenv("RADARR_QUALITY_PROFILE_ID", "7")),
+        help="Radarr quality profile id (default: 7 = 'Movies 1080p')",
+    )
+    p.add_argument(
+        "--search",
+        action="store_true",
+        help="Tell Radarr to search for each movie right after adding",
+    )
     p.add_argument("--sleep", type=float, default=0.5, help="Seconds between API calls")
     p.add_argument("--limit", type=int, default=None, help="Only process the first N rows")
     p.add_argument("--dry-run", action="store_true", help="Report actions without adding anything")
-    p.add_argument("--unmatched-csv", default=None,
-                   help="Where to write unmatched rows (default: <csv>.unmatched.csv)")
+    p.add_argument(
+        "--unmatched-csv",
+        default=None,
+        help="Where to write unmatched rows (default: <csv>.unmatched.csv)",
+    )
     p.add_argument("-v", "--verbose", action="store_true", help="Debug logging")
     args = p.parse_args()
 
