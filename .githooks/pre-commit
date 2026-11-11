@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+if grep -qE '\.py$' <<<"$staged"; then
+  uvx ruff check
+  uvx ruff format --check
+fi
+if grep -qE '\.sh$|^\.githooks/' <<<"$staged" && command -v shellcheck >/dev/null; then
+  git ls-files '*.sh' '.githooks/*' | xargs shellcheck
+fi
