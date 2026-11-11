@@ -67,7 +67,22 @@ python scripts/import_letterboxd_to_radarr.py --csv scripts/watchlists/watchlist
 | `--sleep` | `0.5` | Seconds between API calls (be nice to Radarr) |
 | `--limit` | all | Only process the first N rows (handy for testing) |
 | `--dry-run` | off | Report actions, change nothing |
+| `--backfill-tags` | off | Add `src-letterboxd` to movies already in Radarr that appear in the CSV |
 | `-v/--verbose` | off | Debug logging |
+
+### Provenance tags
+Every movie the importer adds gets two Radarr tags: `src-letterboxd` and
+`wl-YYYY-MM`, the month of the run. Radarr only allows `a-z`, `0-9` and `-` in
+tag labels. The tags are created on first use and reused after that.
+
+For movies imported before tagging existed, `--backfill-tags` adds
+`src-letterboxd` to every movie already in Radarr that matches a CSV row. It only
+adds the tag, never removes one, and with `--dry-run` it reports counts without
+changing anything:
+```bash
+python scripts/import_letterboxd_to_radarr.py --csv scripts/watchlists/watchlist.csv \
+  --backfill-tags --dry-run
+```
 
 ### What "unmatched" means
 Anything Radarr can't confidently match (no result, or no TMDB id) is written to

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+pattern='^(feat|fix|refactor|test|docs|build|ci|chore|perf|revert)(\([a-z0-9-]+\))?!?: .+'
+subject="$(head -1 "$1")"
+if [[ "$subject" =~ ^(fixup|squash|Merge|Revert) ]]; then exit 0; fi
+if ! printf '%s' "$subject" | grep -qE "$pattern"; then
+  echo "commit-msg: not a Conventional Commit: $subject" >&2
+  echo "  expected: type(scope): subject   e.g. feat(scripts): add backup" >&2
+  exit 1
+fi
