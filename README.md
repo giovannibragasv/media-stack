@@ -22,6 +22,7 @@ twice and your torrents keep seeding.
 | **Lidarr** | Music automation | `lscr.io/linuxserver/lidarr` | http://localhost:8686 |
 | **Jellyfin** | Media server / frontend | `lscr.io/linuxserver/jellyfin` | http://localhost:8096 |
 | **FlareSolverr** | Cloudflare solver for protected public indexers | `ghcr.io/flaresolverr/flaresolverr` | http://localhost:8191 |
+| **Bazarr** | Subtitles for Radarr and Sonarr imports | `lscr.io/linuxserver/bazarr` | http://localhost:6767 |
 
 All services share a private Docker bridge network `media-net` and reach each
 other by name (e.g. Prowlarr → `http://flaresolverr:8191`). Containers are named
@@ -174,6 +175,17 @@ paths, not host paths:
 - **Prowlarr ▸ Settings ▸ Indexer Proxies:** add FlareSolverr at
   `http://flaresolverr:8191`, tag it `cf`, and tag Cloudflare-protected indexers
   `cf` so they route through it.
+
+### Bazarr (subtitles)
+
+- **Settings ▸ Radarr** and **Settings ▸ Sonarr:** enable each, host `radarr` /
+  `sonarr`, ports `7878` / `8989`, and the API key from that app's
+  **Settings ▸ General**. Bazarr sees the same `/data` paths, so no path mapping is needed.
+- **Settings ▸ Providers:** add at least one subtitle provider (OpenSubtitles.com
+  needs a free account).
+- **Settings ▸ Languages:** create a language profile with **Portuguese (Brazil)**
+  first and **English** second, then set it as the default for movies and series.
+  Change the order to suit your household.
 
 ## Scripts
 
