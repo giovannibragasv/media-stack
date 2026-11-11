@@ -23,6 +23,7 @@ twice and your torrents keep seeding.
 | **Jellyfin** | Media server / frontend | `lscr.io/linuxserver/jellyfin` | http://localhost:8096 |
 | **FlareSolverr** | Cloudflare solver for protected public indexers | `ghcr.io/flaresolverr/flaresolverr` | http://localhost:8191 |
 | **Homepage** | One landing page with a live tile for every service | `ghcr.io/gethomepage/homepage` | http://localhost:3000 |
+| **Recyclarr** | Syncs TRaSH-guide quality profiles into Radarr and Sonarr (run on demand) | `ghcr.io/recyclarr/recyclarr` | none |
 
 All services share a private Docker bridge network `media-net` and reach each
 other by name (e.g. Prowlarr → `http://flaresolverr:8191`). Containers are named
@@ -190,6 +191,23 @@ come from `homepage/services.yaml`; edit it and Homepage reloads on its own.
 - `homepage/` is mounted read-only. Homepage refuses to start unless every
   config file it knows exists, so the unused ones (`docker.yaml`, `custom.css`
   and so on) are committed empty. Its logs go to `docker logs media-stack-homepage`.
+
+### Recyclarr (quality profiles)
+
+`recyclarr/recyclarr.yml` holds the [TRaSH Guides](https://trash-guides.info/)
+profiles: **HD Bluray + WEB** for Radarr and **WEB-1080p** for Sonarr, with their
+custom formats. It reads `RADARR_API_KEY` and `SONARR_API_KEY` from `.env`. It
+does not start with `docker compose up`; run it by hand. Its cache lives in
+`config/recyclarr` (under `CONFIG_ROOT`), which you create once as yourself:
+
+```bash
+mkdir -p config/recyclarr                          # first run only
+docker compose run --rm recyclarr sync --preview   # show what would change
+docker compose run --rm recyclarr sync             # apply it to Radarr and Sonarr
+```
+
+A sync creates or overwrites those profiles and custom formats in the live apps,
+so read the preview first. Then pick the new profile for your movies and series.
 
 ## Scripts
 
