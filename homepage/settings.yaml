@@ -1,0 +1,14 @@
+title: media-stack
+headerStyle: clean
+statusStyle: dot
+hideVersion: true
+layout:
+  Downloads:
+    style: row
+    columns: 3
+  Library:
+    style: row
+    columns: 3
+  Watch:
+    style: row
+    columns: 3

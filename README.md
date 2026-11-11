@@ -22,6 +22,7 @@ twice and your torrents keep seeding.
 | **Lidarr** | Music automation | `lscr.io/linuxserver/lidarr` | http://localhost:8686 |
 | **Jellyfin** | Media server / frontend | `lscr.io/linuxserver/jellyfin` | http://localhost:8096 |
 | **FlareSolverr** | Cloudflare solver for protected public indexers | `ghcr.io/flaresolverr/flaresolverr` | http://localhost:8191 |
+| **Homepage** | One landing page with a live tile for every service | `ghcr.io/gethomepage/homepage` | http://localhost:3000 |
 
 All services share a private Docker bridge network `media-net` and reach each
 other by name (e.g. Prowlarr → `http://flaresolverr:8191`). Containers are named
@@ -174,6 +175,21 @@ paths, not host paths:
 - **Prowlarr ▸ Settings ▸ Indexer Proxies:** add FlareSolverr at
   `http://flaresolverr:8191`, tag it `cf`, and tag Cloudflare-protected indexers
   `cf` so they route through it.
+
+### Homepage (dashboard)
+
+Open `http://<this-machine>:3000` from any device on your network. The tiles
+come from `homepage/services.yaml`; edit it and Homepage reloads on its own.
+
+- Set `HOMEPAGE_HOST` in `.env` to this machine's LAN IP or hostname. Tile links
+  use it, and Homepage refuses requests addressed to any other host.
+- Fill `RADARR_API_KEY`, `SONARR_API_KEY`, `LIDARR_API_KEY`, `PROWLARR_API_KEY`
+  and `JELLYFIN_API_KEY` in `.env` for live stats. A tile without a key still
+  shows whether the service is up, with an API error under it.
+- Run `docker compose up -d homepage` after changing `.env`.
+- `homepage/` is mounted read-only. Homepage refuses to start unless every
+  config file it knows exists, so the unused ones (`docker.yaml`, `custom.css`
+  and so on) are committed empty. Its logs go to `docker logs media-stack-homepage`.
 
 ## Scripts
 
