@@ -13,6 +13,9 @@ __pycache__/
 # ── Service config / app data (API keys, DBs, credentials) — NEVER publish ────
 config/
 
+# ── Config backups (scripts/backup_config.sh) hold the same secrets ─────────────
+backups/
+
 # ── Media & downloads (large, personal) ──────────────────────────────────────
 data/
 

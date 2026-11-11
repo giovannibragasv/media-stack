@@ -10,10 +10,17 @@ First-run setup. Idempotent — run it any time:
 ./scripts/bootstrap.sh
 ```
 
-Creates the `config/` + `data/` folder layout the compose file expects, and
-seeds `.env` from `.env.example` if you don't have one yet. It reads
-`CONFIG_ROOT` / `DATA_ROOT` from `.env` when present, so it makes the folders in
-the right place even if you've repointed storage.
+Seeds `.env` from `.env.example` if you don't have one yet, then creates the
+`config/` + `data/` folder layout the compose file expects. It resolves
+`CONFIG_ROOT` / `DATA_ROOT` through `docker compose config` (via `lib/env.sh`),
+so it makes the folders exactly where compose will mount them, shell overrides
+included.
+
+## `backup_config.sh`
+
+Timestamped, consistent backup of `config/` while the stack runs. See
+[Backups and restore](../README.md#backups-and-restore) for options, the restore
+steps and the optional launchd schedule.
 
 ## `import_letterboxd_to_radarr.py`
 

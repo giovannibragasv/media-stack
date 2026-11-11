@@ -40,7 +40,9 @@ media-stack/
 │   └── jackett/           # legacy, superseded by Prowlarr
 ├── data/                  # downloads + media libraries (gitignored)
 │   ├── downloads/  movies/  tv/  music/
+├── backups/               # config archives from backup_config.sh (gitignored)
 ├── scripts/               # helper tools (see scripts/README.md)
+│   ├── backup_config.sh
 │   ├── import_letterboxd_to_radarr.py
 │   └── watchlists/        # your CSV exports (gitignored)
 └── planning/              # internal notes (gitignored)
@@ -177,6 +179,8 @@ paths, not host paths:
 
 ## Scripts
 
+- **`scripts/backup_config.sh`** backs up `config/`. See
+  [Backups and restore](#backups-and-restore).
 - **`scripts/import_letterboxd_to_radarr.py`** — bulk-import a Letterboxd
   watchlist into Radarr (with `--dry-run`, matching, and an unmatched-items
   report). See **[scripts/README.md](scripts/README.md)**.
@@ -187,6 +191,52 @@ paths, not host paths:
 `.env` (secrets), and personal CSVs. Cloning this repo gives you the **recipe**,
 not anyone's library or credentials. Back up your `config/` folder separately —
 the media is re-downloadable, the configs are not.
+
+## Backups and restore
+
+```bash
+./scripts/backup_config.sh                    # -> backups/config-YYYYmmdd-HHMMSS.tar.gz
+./scripts/backup_config.sh --dest /Volumes/usb/media-stack --keep 30
+```
+
+It archives `${CONFIG_ROOT}` while the stack keeps running. SQLite databases are
+copied with sqlite3's online `.backup` and each copy must pass
+`PRAGMA integrity_check`, or the run fails. Regenerable bulk is skipped: logs,
+caches, poster art (`MediaCover`, Jellyfin `metadata`), transcodes, the arrs'
+own `Backups` zips, and the legacy `jackett/` folder. Only the newest 14
+archives are kept (`--keep N` or `BACKUP_KEEP`; `--dest DIR` or `BACKUP_DIR`).
+`CONFIG_ROOT` resolves exactly as `docker compose` resolves it (an exported value
+wins over `.env`), so `docker` must be on `PATH`.
+
+Archives contain API keys and passwords. They are written `0600` and
+`backups/` is gitignored; keep copies somewhere private.
+
+**Restore:**
+
+```bash
+docker compose down
+# A leftover -wal from the old database would be replayed onto the restored one.
+find config \( -name '*.db-wal' -o -name '*.db-shm' \) -delete
+tar -xzf backups/config-YYYYmmdd-HHMMSS.tar.gz -C config   # or your CONFIG_ROOT
+docker compose up -d
+```
+
+Extracting over `config/` replaces the backed-up files and leaves anything else
+in place. For a clean restore, move the old `config/` aside first. The apps
+re-fetch artwork and recreate logs on their own.
+
+**Daily schedule on macOS (optional):**
+
+```bash
+sed "s|/path/to/media-stack|$PWD|g" scripts/launchd/media-stack.backup-config.plist.example \
+  > ~/Library/LaunchAgents/media-stack.backup-config.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/media-stack.backup-config.plist
+```
+
+Run the script once by hand first so `backups/` exists. The job runs daily at
+03:30 and logs to `backups/backup.log`. Remove it with
+`launchctl bootout gui/$(id -u)/media-stack.backup-config`. On Linux, a cron
+line does the same: `30 3 * * * /path/to/media-stack/scripts/backup_config.sh`.
 
 ## Roadmap
 
