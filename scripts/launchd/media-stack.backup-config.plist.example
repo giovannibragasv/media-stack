@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Daily config backup at 03:30. Replace /path/to/media-stack, then see README "Backups and restore". -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>media-stack.backup-config</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/path/to/media-stack/scripts/backup_config.sh</string>
+  </array>
+  <!-- launchd's default PATH has neither Homebrew nor Docker Desktop's bin, and the script calls docker. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/path/to/media-stack/backups/backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>/path/to/media-stack/backups/backup.log</string>
+</dict>
+</plist>
