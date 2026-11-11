@@ -6,6 +6,10 @@ Reads a Letterboxd CSV (columns: Date,Name,Year,Letterboxd URI), looks each
 title up against the Radarr API, and adds the matched movie to Radarr with a
 chosen quality profile and root folder. Movies already present are skipped.
 
+Every movie it adds is tagged with its provenance: `src-letterboxd` and
+`wl-YYYY-MM` (the month of the run). `--backfill-tags` adds `src-letterboxd` to
+movies that are already in Radarr and appear in the CSV.
+
 Anything Radarr can't confidently match is written to an "unmatched" CSV so you
 can review it by hand (these are often miniseries/TV that belong in Sonarr, or
 titles whose year/spelling differs from TMDB).
@@ -27,10 +31,18 @@ import os
 import sys
 import time
 from dataclasses import dataclass
+from datetime import date
 
 import requests
 
 log = logging.getLogger("letterboxd2radarr")
+
+SOURCE_TAG = "src-letterboxd"
+
+
+def provenance_labels(today: date) -> list[str]:
+    # Radarr tag labels only allow [a-z0-9-], so `src:letterboxd` becomes `src-letterboxd`.
+    return [SOURCE_TAG, f"wl-{today:%Y-%m}"]
 
 
 @dataclass
@@ -43,6 +55,7 @@ class Config:
     sleep: float
     dry_run: bool
     limit: int | None
+    backfill_tags: bool = False
 
 
 class Radarr:
@@ -72,19 +85,45 @@ class Radarr:
         r.raise_for_status()
         return r.json()
 
+    def put(self, path: str, payload: dict):
+        r = self.session.put(f"{self.base}{path}", json=payload, timeout=30)
+        r.raise_for_status()
+        return r.json()
+
     def ping(self) -> str:
         """Return Radarr version; raises if unreachable/unauthorized."""
         return self.get("/system/status").get("version", "unknown")
 
-    def existing_tmdb_ids(self) -> set[int]:
-        """All tmdbIds currently in Radarr — fetched ONCE (not per row)."""
-        return {m["tmdbId"] for m in self.get("/movie") if m.get("tmdbId")}
+    def movies_by_tmdb_id(self) -> dict[int, dict]:
+        """All movies currently in Radarr keyed by tmdbId — fetched ONCE (not per row)."""
+        return {m["tmdbId"]: m for m in self.get("/movie") if m.get("tmdbId")}
+
+    def tag_ids(self) -> dict[str, int]:
+        return {t["label"]: t["id"] for t in self.get("/tag")}
+
+    def ensure_tags(self, labels: list[str]) -> dict[str, int]:
+        """Label -> id for each label, creating only the ones Radarr doesn't have yet."""
+        ids = self.tag_ids()
+        for label in labels:
+            if label not in ids:
+                created = self.post("/tag", {"label": label})
+                if not created:
+                    raise RuntimeError(f"Radarr rejected tag label {label!r}")
+                ids[label] = created["id"]
+        return {label: ids[label] for label in labels}
+
+    def add_tags(self, movie_ids: list[int], tag_ids: list[int]) -> None:
+        """Union tag_ids into each movie's tags in one bulk call; never removes a tag."""
+        self.put(
+            "/movie/editor",
+            {"movieIds": movie_ids, "tags": tag_ids, "applyTags": "add"},
+        )
 
     def lookup(self, term: str) -> list[dict]:
         self._throttle()
         return self.get("/movie/lookup", term=term)
 
-    def add_movie(self, movie: dict, cfg: Config) -> dict | None:
+    def add_movie(self, movie: dict, cfg: Config, tag_ids: list[int]) -> dict | None:
         payload = {
             "title": movie["title"],
             "year": movie["year"],
@@ -95,6 +134,7 @@ class Radarr:
             "rootFolderPath": cfg.root_folder,
             "qualityProfileId": cfg.quality_profile_id,
             "minimumAvailability": "released",
+            "tags": tag_ids,
             "addOptions": {"searchForMovie": cfg.search_on_add},
         }
         self._throttle()
@@ -146,11 +186,22 @@ def run(cfg: Config, csv_path: str, unmatched_path: str) -> int:
         rows = rows[: cfg.limit]
     log.info("Loaded %d rows from %s", len(rows), csv_path)
 
-    existing = radarr.existing_tmdb_ids()
+    in_radarr = radarr.movies_by_tmdb_id()
+    existing = set(in_radarr)
     log.info("Radarr already has %d movies", len(existing))
+
+    labels = provenance_labels(date.today())
+    if cfg.dry_run:
+        tags = {label: i for label, i in radarr.tag_ids().items() if label in labels}
+        missing = [label for label in labels if label not in tags]
+        if missing:
+            log.info("Would create tags: %s", ", ".join(missing))
+    else:
+        tags = radarr.ensure_tags(labels)
 
     added = skipped = present = unmatched = 0
     unmatched_rows: list[dict] = []
+    matched_in_radarr: dict[int, dict] = {}
 
     for i, row in enumerate(rows, 1):
         title = (row.get("Name") or "").strip().strip('"')
@@ -178,6 +229,9 @@ def run(cfg: Config, csv_path: str, unmatched_path: str) -> int:
         if movie["tmdbId"] in existing:
             log.info("%s -> already in Radarr", prefix)
             present += 1
+            if movie["tmdbId"] in in_radarr:
+                found = in_radarr[movie["tmdbId"]]
+                matched_in_radarr[found["id"]] = found
             continue
 
         if cfg.dry_run:
@@ -192,7 +246,7 @@ def run(cfg: Config, csv_path: str, unmatched_path: str) -> int:
             existing.add(movie["tmdbId"])  # avoid dup-counting within the run
             continue
 
-        result = radarr.add_movie(movie, cfg)
+        result = radarr.add_movie(movie, cfg, list(tags.values()))
         if result:
             log.info("%s -> ADDED: %s (%s)", prefix, result.get("title"), result.get("year"))
             added += 1
@@ -211,6 +265,9 @@ def run(cfg: Config, csv_path: str, unmatched_path: str) -> int:
             "Wrote %d unmatched rows to %s (review by hand)", len(unmatched_rows), unmatched_path
         )
 
+    if cfg.backfill_tags:
+        backfill(radarr, matched_in_radarr, tags.get(SOURCE_TAG), cfg.dry_run)
+
     verb = "would add" if cfg.dry_run else "added"
     log.info(
         "Done. %s=%d, already_present=%d, skipped=%d, unmatched=%d",
@@ -221,6 +278,23 @@ def run(cfg: Config, csv_path: str, unmatched_path: str) -> int:
         unmatched,
     )
     return 0
+
+
+def backfill(radarr: Radarr, matched: dict[int, dict], tag_id: int | None, dry_run: bool) -> int:
+    """Add the source tag to matched movies that lack it. Returns how many it tags."""
+    untagged = [mid for mid, m in matched.items() if tag_id not in m.get("tags", [])]
+    verb = "would tag" if dry_run else "tagged"
+    log.info(
+        "Backfill: %d movies in Radarr match the CSV, %d already have %s, %s %d",
+        len(matched),
+        len(matched) - len(untagged),
+        SOURCE_TAG,
+        verb,
+        len(untagged),
+    )
+    if untagged and not dry_run:
+        radarr.add_tags(untagged, [tag_id])
+    return len(untagged)
 
 
 def main() -> int:
@@ -251,6 +325,11 @@ def main() -> int:
     p.add_argument("--limit", type=int, default=None, help="Only process the first N rows")
     p.add_argument("--dry-run", action="store_true", help="Report actions without adding anything")
     p.add_argument(
+        "--backfill-tags",
+        action="store_true",
+        help=f"Add the {SOURCE_TAG} tag to movies already in Radarr that appear in the CSV",
+    )
+    p.add_argument(
         "--unmatched-csv",
         default=None,
         help="Where to write unmatched rows (default: <csv>.unmatched.csv)",
@@ -278,6 +357,7 @@ def main() -> int:
         sleep=args.sleep,
         dry_run=args.dry_run,
         limit=args.limit,
+        backfill_tags=args.backfill_tags,
     )
     unmatched_path = args.unmatched_csv or (args.csv.rsplit(".", 1)[0] + ".unmatched.csv")
     return run(cfg, args.csv, unmatched_path)
