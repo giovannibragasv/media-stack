@@ -1,0 +1,37 @@
+name: Conventional Commits
+
+# No paths-ignore: docs-only PRs still need conventional titles and commits.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: commits-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the PR title and every commit subject
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bad=0
+          while IFS= read -r subject; do
+            case "$subject" in
+              fixup!*|squash!*|amend!*) echo "::error::Unsquashed commit: $subject"; bad=1; continue ;;
+            esac
+            .githooks/commit-msg <(printf '%s\n' "$subject") || bad=1
+          done < <(printf '%s\n' "$TITLE"; git log --format=%s "$BASE..$HEAD")
+          exit $bad
