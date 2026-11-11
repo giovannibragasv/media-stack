@@ -139,6 +139,22 @@ services:
     restart: unless-stopped
     networks: [media-net]
 
+  # ── Subtitles for everything Radarr and Sonarr import ────────────────────────
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: media-stack-bazarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT:-./config}/bazarr:/config
+      - ${DATA_ROOT:-./data}:/data               # writes .srt next to /data/{movies,tv}
+    ports:
+      - "${BAZARR_PORT:-6767}:6767"
+    restart: unless-stopped
+    networks: [media-net]
+
 networks:
   media-net:
     driver: bridge
