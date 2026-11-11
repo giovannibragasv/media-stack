@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: lint, test, compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Skip docs-only changes
+        id: changes
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -n "$base" ] && git cat-file -e "$base" 2>/dev/null \
+             && ! git diff --name-only "$base" HEAD | grep -qvE '(^docs/|\.md$|^LICENSE)'; then
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "Only docs changed; skipping the checks."
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changes.outputs.code == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - if: steps.changes.outputs.code == 'true'
+        uses: astral-sh/setup-uv@v6
+      - if: steps.changes.outputs.code == 'true'
+        run: uvx ruff check
+      - if: steps.changes.outputs.code == 'true'
+        run: uvx ruff format --check
+      - name: unittest
+        if: steps.changes.outputs.code == 'true' && hashFiles('tests/**/*.py') != ''
+        run: |
+          pip install -r scripts/requirements.txt
+          python -m unittest discover -s tests -t .
+      - name: shellcheck
+        if: steps.changes.outputs.code == 'true'
+        run: git ls-files '*.sh' '.githooks/*' | xargs shellcheck
+      - name: compose config
+        if: steps.changes.outputs.code == 'true'
+        run: |
+          for f in $(git ls-files 'docker-compose*.yml'); do
+            docker compose --env-file .env.example -f "$f" config -q
+          done
+
+  commits:
+    name: Conventional Commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the PR title and every commit subject
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='^(feat|fix|refactor|test|docs|build|ci|chore|perf|revert)(\([a-z0-9-]+\))?!?: .+'
+          bad=0
+          if ! printf '%s' "$TITLE" | grep -qE "$pattern"; then
+            echo "::error::PR title is not a Conventional Commit: $TITLE"
+            bad=1
+          fi
+          while IFS= read -r subject; do
+            if ! printf '%s' "$subject" | grep -qE "$pattern"; then
+              echo "::error::Commit is not a Conventional Commit: $subject"
+              bad=1
+            fi
+          done < <(git log --format=%s "$BASE..$HEAD")
+          exit $bad

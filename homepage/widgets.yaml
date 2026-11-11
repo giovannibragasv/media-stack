@@ -1,0 +1,5 @@
+- datetime:
+    text_size: md
+    format:
+      dateStyle: long
+      timeStyle: short
